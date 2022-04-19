@@ -1,147 +1,104 @@
-import json
-import re
-from typing import Dict, List
-
+from typing import List
 from telebot.types import Message
-import requests
-import operator
-
+from telebot import types
 from loader import bot
-from config_data.config import RAPID_API_KEY
+from datetime import date, timedelta
 from states.requests import UserInfoState
+from keyboards.сalendar.dates import get_calendar, ALL_STEPS
 from keyboards.reply.answer_no_yes import answer
+from rapid_api.search_city import search_city
+from rapid_api.search_hotel import search_hotel
+from rapid_api.photos import search_photos
 
 """Команда для поиска топ самых дешевых отелей в выбранном городе"""
 
 
-def request_to_api(url: str, querystring: Dict) -> str:
-    """Функция запроса к api по заданным параметрам"""
-
-    headers: Dict = {
-        "X-RapidAPI-Host": "hotels4.p.rapidapi.com",
-        "X-RapidAPI-Key": RAPID_API_KEY
-    }
-
-    try:
-        response = requests.request("GET", url, headers=headers, params=querystring, timeout=30)
-        if response.status_code == requests.codes.ok:
-            return response.text
-        else:
-            raise Exception
-    except Exception:
-        print('Что-то пошло не так')
-
-
 @bot.message_handler(commands=['lowprice'])
-def lowprice(message: Message) -> None:
-    """Функция, запрашивающая у пользователя город для поиска отелей"""
-    bot.set_state(message.from_user.id, UserInfoState.city, message.chat.id)
-    bot.send_message(message.from_user.id, "В каком городе будем искать отели?")
+def calendar_command(message: Message) -> None:
+    """Функция, запрашивающая у пользователя даты заезда и выезда"""
+    calendar, step = get_calendar(calendar_id=1,
+                                  min_date=date.today(),
+                                  max_date=date.today() + timedelta(days=365),
+                                  locale="ru",
+                                  )
+
+    bot.set_state(message.from_user.id, UserInfoState.check_in, message.chat.id)
+    bot.send_message(message.from_user.id, f"Привет! Тебя приветствует Телеграмм-бот по поиску самых дешевых отелей! \n"
+                                           f"Давай выберем дату заезда: \n"
+                                           f"Выбери {ALL_STEPS[step]}", reply_markup=calendar)
 
 
 @bot.message_handler(state=UserInfoState.city)
-def bot_city(message: Message) -> None:
-    """Функция запрашивающая у пользователя количество отелей для вывода"""
-    bot.send_message(message.from_user.id, 'Спасибо, записал. Сколько отелей показать (не более 20)?')
+def lowprice(message: Message) -> None:
+    """Функция, запрашивающая у пользователя город для поиска отелей"""
+    with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
+        data['query'] = message.text
     bot.set_state(message.from_user.id, UserInfoState.count_hotels, message.chat.id)
-    with bot.retrieve_data(message.from_user.id, message.chat.id) as querystring:
-        querystring['query'] = message.text
+    bot.send_message(message.from_user.id, "Спасибо, записал. Сколько отелей показать (не более 10)?")
 
 
 @bot.message_handler(state=UserInfoState.count_hotels)
 def bot_count_hotels(message: Message) -> None:
     """Функция, запрашивающая у пользователя необходимость вывода фотографий"""
-    if message.text.isdigit() and int(message.text) <= 20:
+
+    if message.text.isdigit() and int(message.text) <= 10:
         bot.send_message(message.from_user.id, 'Спасибо, записал. '
                                                'Нужно выводить фотографии отеля? (Нажми "Да" или "Нет")',
                          reply_markup=answer())
         bot.set_state(message.from_user.id, UserInfoState.city_search, message.chat.id)
-        with bot.retrieve_data(message.from_user.id, message.chat.id) as querystring:
-            querystring['count_hotels'] = message.text
+        with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
+            data['count_hotels'] = message.text
 
-    elif message.text.isdigit() and int(message.text) > 20:
-        bot.send_message(message.from_user.id, 'Количество отелей не должно превышать 20')
+    elif message.text.isdigit() and int(message.text) > 10:
+        bot.send_message(message.from_user.id, 'Количество отелей не должно превышать 10')
     else:
         bot.send_message(message.from_user.id, 'Количество отелей должно быть числом')
 
 
 @bot.message_handler(state=UserInfoState.city_search)
 def bot_search(message: Message) -> None:
-    """Функция, которая ищет по api нужный город, и выводит информацию по самым дешевым отелям"""
-    with bot.retrieve_data(message.from_user.id, message.chat.id) as querystring:
-        querystring['need_for_photos'] = message.text
+    """Функция вывода информации по самым дешевым отелям"""
 
-    request_1 = request_to_api("https://hotels4.p.rapidapi.com/locations/v2/search", querystring)
-    pattern: str = r'(?<="CITY_GROUP",).+?[\]]'
-    find = re.search(pattern, request_1)
+    with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
+        data['need_for_photos'] = message.text
 
-    if find:
-        data: Dict = json.loads(f"{{{find[0]}}}")
-
-        for dest_id in data['entities']:
-            if dest_id['type'] == 'CITY' and dest_id['name'].lower() == querystring['query'].lower():
-                querystring['destinationId'] = dest_id['destinationId']
-                break
-
-    if querystring.get('destinationId'):
-        request_2 = request_to_api("https://hotels4.p.rapidapi.com/properties/list", querystring)
-        pattern_2: str = r'(?<=,)"results":.+?(?=,"pagination")'
-        find_2 = re.search(pattern_2, request_2)
-
-        if find_2:
-            data_2: Dict = json.loads(f"{{{find_2[0]}}}")
-            result_search: List = [{'name': i_value.get('name', 'Нет'),
-                                    'address': i_value.get('address', 'Нет').get('streetAddress', 'Нет'),
-                                    'starRating': i_value.get('starRating', 'Нет'),
-                                    'City center': i_value['landmarks'][0].get('distance', 'Нет'),
-                                    'current': i_value.get('ratePlan', 'Нет').get('price', 'Нет').get('current',
-                                                                                                      'Нет'),
-                                    'exactCurrent': i_value.get('ratePlan', 'Нет').get('price', 'Нет').get(
-                                        'exactCurrent', 'Нет'),
-                                    'id': i_value.get('id', 'Нет')}
-                                   for i_value in data_2['results']]
-            result_search.sort(key=operator.itemgetter('exactCurrent'))
-            querystring['results'] = result_search
-
-            for i_value in result_search[:int(querystring['count_hotels'])]:
-                answer: str = f'\nОтель: {i_value["name"]}\nАдрес: {i_value["address"]}\n ' \
-                              f'Количество звезд: {i_value["starRating"]}\n ' \
-                              f'Расстояние до центра: {i_value["City center"]}\nЦена: {i_value["current"]}\n'
-                if message.text.lower() == 'нет':
-                    bot.send_message(message.from_user.id, answer)
-                bot.set_state(message.from_user.id, UserInfoState.no_state, message.chat.id)
-
-            if message.text.lower() == 'да':
-                bot.send_message(message.from_user.id, 'Сколько фотографий показать? (Не более 10)')
-                bot.set_state(message.from_user.id, UserInfoState.photos, message.chat.id)
-            elif message.text.lower() != 'да' and message.text.lower() != 'нет':
-                bot.send_message(message.from_user.id, 'Выбери "Да" или "Нет"')
+    try:
+        if message.text.lower() == 'да':
+            bot.send_message(message.from_user.id, 'Сколько фотографий показать? (Не более 5)')
+            bot.set_state(message.from_user.id, UserInfoState.photos, message.chat.id)
+        elif message.text.lower() == 'нет':
+            result: List = search_hotel(search_city(data['query']), data)
+            for i_res in result[:int(data['count_hotels'])]:
+                bot.send_message(message.from_user.id, i_res['answer'])
+            bot.set_state(message.from_user.id, UserInfoState.no_state, message.chat.id)
+        else:
+            bot.send_message(message.from_user.id, 'Выбери "Да" или "Нет"')
+    except KeyError:
+        print()
 
 
-@bot.message_handler(state=UserInfoState.photos)  # Фото вывести у меня не получилось, нужна помощь(
+@bot.message_handler(state=UserInfoState.photos)
 def bot_search(message: Message) -> None:
     """Функция, которая выводит фотографии отелей"""
 
-    with bot.retrieve_data(message.from_user.id, message.chat.id) as querystring:
-        querystring['count_photos'] = message.text
-    querystring_id: Dict = dict()
+    with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
+        data['count_photos'] = message.text
 
-    if message.text.isdigit() and int(message.text) <= 10:
+    if message.text.isdigit() and int(message.text) <= 5:
+        result: List = search_photos(search_hotel(search_city(data['query']),
+                                                  data), int(message.text))
 
-        for i_value in querystring['results'][:int(message.text)]:
-            answer: str = f'\nОтель: {i_value["name"]}\nАдрес: {i_value["address"]}\n ' \
-                          f'Количество звезд: {i_value["starRating"]}\n ' \
-                          f'Расстояние до центра: {i_value["City center"]}\nЦена: {i_value["current"]}\n'
-            querystring_id['id'] = i_value['id']
-            request_3 = request_to_api("https://hotels4.p.rapidapi.com/properties/get-hotel-photos", querystring_id)
-            data_3: Dict = json.loads(request_3)
-            bot.send_message(message.from_user.id, answer)
+        try:
+            for i_res in result[:int(data['count_hotels'])]:
+                bot.send_message(message.from_user.id, i_res['answer'])
+                media = [types.InputMediaPhoto(media=i_photo) for i_photo in i_res['photos']]
+                bot.send_media_group(chat_id=message.chat.id, media=media)
+        except KeyError:
+            print()
 
-            for i_photo in data_3['hotelImages'][:int(message.text)]:
-                bot.send_photo(message.chat.id, i_photo['baseUrl'])
         bot.set_state(message.from_user.id, UserInfoState.no_state, message.chat.id)
 
-    elif message.text.isdigit() and int(message.text) > 10:
-        bot.send_message(message.from_user.id, 'Число фотографий не должно быть больше 10')
+    elif message.text.isdigit() and int(message.text) > 5:
+        bot.send_message(message.from_user.id, 'Число фотографий не должно быть больше 5')
     else:
         bot.send_message(message.from_user.id, 'Введите количество фотографий')
