@@ -8,4 +8,6 @@ class UserInfoState(StatesGroup):
     count_hotels = State()
     city_search = State()
     photos = State()
+    arrival_date = State()
+    departure_date = State()
     no_state = None
