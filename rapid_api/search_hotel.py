@@ -25,6 +25,8 @@ def search_hotel(destination_id: int, data: Dict) -> List:
                                 'id': i_value.get('id', 'Нет')}
                                for i_value in data_2['results']]
         result_search.sort(key=operator.itemgetter('exactCurrent'))
+        result: List = list()
+
         for i_value in result_search:
             answer: str = f'\nОтель: {i_value["name"]}\nАдрес: {i_value["address"]}\n' \
                           f'Расстояние до центра: {i_value["City center"]}\nЦена за ночь: {i_value["current"]}\n' \
@@ -32,4 +34,20 @@ def search_hotel(destination_id: int, data: Dict) -> List:
                           f'Ссылка на отель: https://www.hotels.com/ho{i_value["id"]}'
             i_value.update({'answer': answer})
 
-        return result_search
+        if data['commands'] == '/lowprice':
+            for i_value in result_search[:int(data['count_hotels'])]:
+                result.append(i_value)
+
+        elif data['commands'] == '/highprice':
+            for i_value in result_search[-int(data['count_hotels']):]:
+                result.append(i_value)
+
+        elif data['commands'] == '/bestdeal':
+            for i_value in result_search:
+                if (i_value["exactCurrent"] >= data['min_price']) and (i_value["exactCurrent"] <= data['max_price'])\
+                        and (float(i_value["City center"].split(' ')[0]) >= data['min_distance'])\
+                        and (float(i_value["City center"].split(' ')[0]) <= data['max_distance']):
+                    if len(result) < int(data['count_hotels']):
+                        result.append(i_value)
+
+        return result

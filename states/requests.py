@@ -7,5 +7,7 @@ class UserInfoState(StatesGroup):
     city = State()
     count_hotels = State()
     city_search = State()
+    price_range = State()
+    distance_range = State()
     photos = State()
     no_state = None
