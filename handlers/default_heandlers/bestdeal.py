@@ -7,6 +7,8 @@ from keyboards.reply.distance_range import ranges_dinst
 
 @bot.message_handler(state=UserInfoState.price_range)
 def bot_range(message: Message):
+    """Функция, запрашивающая у пользователя диапазон цен"""
+
     with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
         if message.text.split(' ')[0] == 'до':
             data['min_price'] = 0
@@ -25,6 +27,8 @@ def bot_range(message: Message):
 
 @bot.message_handler(state=UserInfoState.distance_range)
 def bot_range(message: Message):
+    """Функция, запрашивающая у пользователя диапазон расстояний удаеленности от центра"""
+
     with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
         if message.text.split(' ')[0] == 'до':
             data['min_distance'] = 0
