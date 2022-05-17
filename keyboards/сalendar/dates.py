@@ -65,11 +65,12 @@ def handle_arrival_date(call: CallbackQuery):
 
 @bot.callback_query_handler(func=DetailedTelegramCalendar.func(calendar_id=2))
 def handle_arrival_date(call: CallbackQuery):
-    today = date.today()
+    with bot.retrieve_data(call.from_user.id, call.message.chat.id) as data:
+        data['check_out'] = ''
     result, key, step = get_calendar(calendar_id=2,
-                                     current_date=today,
-                                     min_date=today + timedelta(days=1),
-                                     max_date=today + timedelta(days=365),
+                                     current_date=data['check_in'],
+                                     min_date=data['check_in'] + timedelta(days=1),
+                                     max_date=data['check_in'] + timedelta(days=365),
                                      locale="ru",
                                      is_process=True,
                                      callback_data=call

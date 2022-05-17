@@ -1,4 +1,5 @@
 from typing import List
+
 from telebot.types import Message
 from telebot import types
 from loader import bot
@@ -71,19 +72,16 @@ def bot_search(message: Message) -> None:
     with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
         data['need_for_photos'] = message.text
 
-    try:
-        if message.text.lower() == 'да':
-            bot.send_message(message.from_user.id, 'Сколько фотографий показать? (Не более 5)')
-            bot.set_state(message.from_user.id, UserInfoState.photos, message.chat.id)
-        elif message.text.lower() == 'нет':
-            result: List = search_hotel(search_city(data['query']), data)
-            for i_res in result:
-                bot.send_message(message.from_user.id, i_res['answer'], disable_web_page_preview=True)
-                bot.set_state(message.from_user.id, UserInfoState.no_state, message.chat.id)
-        else:
-            bot.send_message(message.from_user.id, 'Выбери "Да" или "Нет"')
-    except KeyError:
-        print()
+    if message.text.lower() == 'да':
+        bot.send_message(message.from_user.id, 'Сколько фотографий показать? (Не более 5)')
+        bot.set_state(message.from_user.id, UserInfoState.photos, message.chat.id)
+    elif message.text.lower() == 'нет':
+        result: List = search_hotel(search_city(data['query']), data)
+        for i_res in result:
+            bot.send_message(message.from_user.id, i_res.get('answer', 'Данные не найдены'), disable_web_page_preview=True)
+            bot.set_state(message.from_user.id, UserInfoState.no_state, message.chat.id)
+    else:
+        bot.send_message(message.from_user.id, 'Выбери "Да" или "Нет"')
 
 
 @bot.message_handler(state=UserInfoState.photos)
@@ -91,25 +89,22 @@ def bot_search(message: Message) -> None:
     """Функция, которая выводит фотографии отелей"""
 
     with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
-        data['count_photos'] = message.text
+        data['count_photos'] = int(message.text)
 
     if message.text.isdigit() and int(message.text) <= 5:
         result: List = search_photos(search_hotel(search_city(data['query']),
-                                                  data), int(message.text))
+                                                  data))
         bot.set_state(message.from_user.id, UserInfoState.no_state, message.chat.id)
 
-        try:
-            if result:
-                for i_res in result:
-                    media = [types.InputMediaPhoto(media=i_res['photos'][i_photo], caption=i_res['answer'])
-                             if i_photo == 0 else types.InputMediaPhoto(media=i_res['photos'][i_photo])
-                             for i_photo in range(len(i_res['photos']))]
-                    bot.send_media_group(chat_id=message.chat.id, media=media)
-            else:
-                bot.send_message(message.from_user.id, 'По заданным параметрам ничего не найдено.\n'
-                                                       'Попробуйте еще раз, выберите нужную команду.')
-        except KeyError:
-            print()
+        if result:
+            for i_res in result:
+                media = [types.InputMediaPhoto(i_res['photos'][i_photo], caption=i_res.get('answer'))
+                         if i_photo == 0 else types.InputMediaPhoto(i_res['photos'][i_photo])
+                         for i_photo in range(len(i_res['photos'][:data['count_photos']]))]
+                bot.send_media_group(chat_id=message.chat.id, media=media, protect_content=True)
+        else:
+            bot.send_message(message.from_user.id, 'По заданным параметрам ничего не найдено.\n'
+                                                   'Попробуйте еще раз, выберите нужную команду.')
 
     elif message.text.isdigit() and int(message.text) > 5:
         bot.send_message(message.from_user.id, 'Число фотографий не должно быть больше 5')
