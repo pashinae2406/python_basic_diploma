@@ -1,9 +1,8 @@
 from typing import List
-
 from telebot.types import Message
 from telebot import types
 from loader import bot
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 from states.requests import UserInfoState
 from keyboards.сalendar.dates import get_calendar, ALL_STEPS
 from keyboards.reply.answer_no_yes import answer
@@ -11,6 +10,7 @@ from keyboards.reply.price_range import ranges_price
 from rapid_api.search_city import search_city
 from rapid_api.search_hotel import search_hotel
 from rapid_api.photos import search_photos
+from telebot.apihelper import ApiTelegramException
 
 
 @bot.message_handler(commands=['lowprice', 'highprice', 'bestdeal'])
@@ -27,8 +27,8 @@ def calendar_command(message: Message) -> None:
     with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
         data['commands'] = message.text
 
-    bot.send_message(message.from_user.id, f"Привет! Тебя приветствует Телеграмм-бот по поиску отелей! \n"
-                                           f"Давай выберем дату заезда: \n"
+    bot.send_message(message.from_user.id, f"Привет! Тебя приветствует Телеграмм-бот по поиску отелей!\n"
+                                           f"Давай выберем дату заезда:\n"
                                            f"Выбери {ALL_STEPS[step]}", reply_markup=calendar)
 
 
@@ -72,14 +72,33 @@ def bot_search(message: Message) -> None:
     with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
         data['need_for_photos'] = message.text
 
+    with open('history.txt', 'a', encoding='utf-8') as file:
+        file.write(f'Команда: {data["commands"]}\nДата и время ввода команды: {datetime.now()}\n'
+                   f'Город: {data["query"].title()}\nНайденные отели: ')
+
     if message.text.lower() == 'да':
         bot.send_message(message.from_user.id, 'Сколько фотографий показать? (Не более 5)')
         bot.set_state(message.from_user.id, UserInfoState.photos, message.chat.id)
     elif message.text.lower() == 'нет':
         result: List = search_hotel(search_city(data['query']), data)
-        for i_res in result:
-            bot.send_message(message.from_user.id, i_res.get('answer', 'Данные не найдены'), disable_web_page_preview=True)
-            bot.set_state(message.from_user.id, UserInfoState.no_state, message.chat.id)
+        if result:
+            for i_res in result:
+                with open('history.txt', 'a', encoding='utf-8') as file:
+                    file.write(f'{i_res["name"]}\n                 ')
+
+                bot.send_message(message.from_user.id, i_res.get('answer'),
+                                 disable_web_page_preview=True)
+
+
+            with open('history.txt', 'a', encoding='utf-8') as file:
+                file.write('\n===========================================================================\n')
+        else:
+            bot.send_message(message.from_user.id, 'По заданным параметрам ничего не найдено.\n'
+                                                   'Попробуйте еще раз, выберите нужную команду.')
+            with open('history.txt', 'a', encoding='utf-8') as file:
+                file.write('По заданным параметрам ничего не найдено\n'
+                           '===========================================================================\n')
+        bot.set_state(message.from_user.id, UserInfoState.no_state, message.chat.id)
     else:
         bot.send_message(message.from_user.id, 'Выбери "Да" или "Нет"')
 
@@ -97,14 +116,31 @@ def bot_search(message: Message) -> None:
         bot.set_state(message.from_user.id, UserInfoState.no_state, message.chat.id)
 
         if result:
+
             for i_res in result:
+                with open('history.txt', 'a', encoding='utf-8') as file:
+                    file.write(f'{i_res["name"]}\n                 ')
+
                 media = [types.InputMediaPhoto(i_res['photos'][i_photo], caption=i_res.get('answer'))
                          if i_photo == 0 else types.InputMediaPhoto(i_res['photos'][i_photo])
                          for i_photo in range(len(i_res['photos'][:data['count_photos']]))]
-                bot.send_media_group(chat_id=message.chat.id, media=media, protect_content=True)
+                try:
+                    bot.send_media_group(chat_id=message.chat.id, media=media)
+                except ApiTelegramException:
+                    bot.send_photo(message.from_user.id,
+                                   'https://go.skillbox.ru/media/files/'
+                                   'ba09b8e3-e01b-4a15-b361-3c5b88f5b876/1648452936327.png',
+                                   caption=i_res.get('answer'))
+
+            with open('history.txt', 'a', encoding='utf-8') as file:
+                file.write('\n===========================================================================\n')
+
         else:
             bot.send_message(message.from_user.id, 'По заданным параметрам ничего не найдено.\n'
                                                    'Попробуйте еще раз, выберите нужную команду.')
+            with open('history.txt', 'a', encoding='utf-8') as file:
+                file.write('По заданным параметрам ничего не найдено\n'
+                           '===========================================================================\n')
 
     elif message.text.isdigit() and int(message.text) > 5:
         bot.send_message(message.from_user.id, 'Число фотографий не должно быть больше 5')
