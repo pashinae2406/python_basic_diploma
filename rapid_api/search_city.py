@@ -7,7 +7,7 @@ from rapid_api.request import request_to_api
 def search_city(city: str) -> int:
     """Функция поиска ID города по запросу пользователя"""
 
-    request_1 = request_to_api("https://hotels4.p.rapidapi.com/locations/v2/search", {'query': city})
+    request_1 = request_to_api("https://hotels4.p.rapidapi.com/locations/v2/search", {'query': city, 'locale': 'ru_RU'})
     pattern: str = r'(?<="CITY_GROUP",).+?[\]]'
     find = re.search(pattern, request_1)
 

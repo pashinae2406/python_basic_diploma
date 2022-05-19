@@ -1,16 +1,22 @@
 from telebot.types import Message
 from loader import bot
-import os
+import sqlite3
 
 
 @bot.message_handler(commands=['history'])
 def bot_history(message: Message) -> None:
 
-    path = os.path.abspath(os.path.join('history.txt'))
     request_history = ''
+    con = sqlite3.connect('people.db')
+    cur = con.cursor()
+    history_list = cur.execute(f"SELECT * FROM user WHERE telegram_id = {message.from_user.id}").fetchall()
 
-    with open(path, 'r', encoding='utf-8') as file:
-        for i_request in file:
-            request_history += i_request
+    for i_request in history_list:
+        request_history += f'Комманда: {i_request[1]}\nДата и время ввода команды: {i_request[3]}\n' \
+                                          f'Город: {i_request[4].title()}\nНайденные отели: '
+
+        for i_hotel in i_request[5][1:-1].split(', '):
+            request_history += f'{i_hotel[1:-1]}\n                 '
+        request_history += '\n======================================================\n'
 
     bot.reply_to(message, request_history)

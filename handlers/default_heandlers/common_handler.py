@@ -11,6 +11,7 @@ from rapid_api.search_city import search_city
 from rapid_api.search_hotel import search_hotel
 from rapid_api.photos import search_photos
 from telebot.apihelper import ApiTelegramException
+from database.request_history import db, user
 
 
 @bot.message_handler(commands=['lowprice', 'highprice', 'bestdeal'])
@@ -72,35 +73,30 @@ def bot_search(message: Message) -> None:
     with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
         data['need_for_photos'] = message.text
 
-    with open('history.txt', 'a', encoding='utf-8') as file:
-        file.write(f'Команда: {data["commands"]}\nДата и время ввода команды: {datetime.now()}\n'
-                   f'Город: {data["query"].title()}\nНайденные отели: ')
+        hotels: List = list()
+        if message.text.lower() == 'да':
+            bot.send_message(message.from_user.id, 'Сколько фотографий показать? (Не более 5)')
+            bot.set_state(message.from_user.id, UserInfoState.photos, message.chat.id)
+        elif message.text.lower() == 'нет':
+            result: List = search_hotel(search_city(data['query']), data)
+            if result:
+                for i_res in result:
+                    hotels.append(i_res['name'])
+                    bot.send_message(message.from_user.id, i_res.get('answer'),
+                                     disable_web_page_preview=True)
 
-    if message.text.lower() == 'да':
-        bot.send_message(message.from_user.id, 'Сколько фотографий показать? (Не более 5)')
-        bot.set_state(message.from_user.id, UserInfoState.photos, message.chat.id)
-    elif message.text.lower() == 'нет':
-        result: List = search_hotel(search_city(data['query']), data)
-        if result:
-            for i_res in result:
-                with open('history.txt', 'a', encoding='utf-8') as file:
-                    file.write(f'{i_res["name"]}\n                 ')
+            else:
+                bot.send_message(message.from_user.id, 'По заданным параметрам ничего не найдено.\n'
+                                                       'Попробуйте еще раз, выберите нужную команду.')
+                hotels = ['По заданным параметрам ничего не найдено']
 
-                bot.send_message(message.from_user.id, i_res.get('answer'),
-                                 disable_web_page_preview=True)
-
-
-            with open('history.txt', 'a', encoding='utf-8') as file:
-                file.write('\n===========================================================================\n')
+            user.create_table()
+            with db:
+                user.create(command=data['commands'], telegram_id=message.from_user.id,
+                            date_time=datetime.now(), city=data['query'], hotels=hotels)
+            bot.set_state(message.from_user.id, UserInfoState.no_state, message.chat.id)
         else:
-            bot.send_message(message.from_user.id, 'По заданным параметрам ничего не найдено.\n'
-                                                   'Попробуйте еще раз, выберите нужную команду.')
-            with open('history.txt', 'a', encoding='utf-8') as file:
-                file.write('По заданным параметрам ничего не найдено\n'
-                           '===========================================================================\n')
-        bot.set_state(message.from_user.id, UserInfoState.no_state, message.chat.id)
-    else:
-        bot.send_message(message.from_user.id, 'Выбери "Да" или "Нет"')
+            bot.send_message(message.from_user.id, 'Выбери "Да" или "Нет"')
 
 
 @bot.message_handler(state=UserInfoState.photos)
@@ -110,6 +106,7 @@ def bot_search(message: Message) -> None:
     with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
         data['count_photos'] = int(message.text)
 
+    hotels: List = list()
     if message.text.isdigit() and int(message.text) <= 5:
         result: List = search_photos(search_hotel(search_city(data['query']),
                                                   data))
@@ -118,9 +115,7 @@ def bot_search(message: Message) -> None:
         if result:
 
             for i_res in result:
-                with open('history.txt', 'a', encoding='utf-8') as file:
-                    file.write(f'{i_res["name"]}\n                 ')
-
+                hotels.append(i_res['name'])
                 media = [types.InputMediaPhoto(i_res['photos'][i_photo], caption=i_res.get('answer'))
                          if i_photo == 0 else types.InputMediaPhoto(i_res['photos'][i_photo])
                          for i_photo in range(len(i_res['photos'][:data['count_photos']]))]
@@ -132,17 +127,16 @@ def bot_search(message: Message) -> None:
                                    'ba09b8e3-e01b-4a15-b361-3c5b88f5b876/1648452936327.png',
                                    caption=i_res.get('answer'))
 
-            with open('history.txt', 'a', encoding='utf-8') as file:
-                file.write('\n===========================================================================\n')
-
         else:
             bot.send_message(message.from_user.id, 'По заданным параметрам ничего не найдено.\n'
                                                    'Попробуйте еще раз, выберите нужную команду.')
-            with open('history.txt', 'a', encoding='utf-8') as file:
-                file.write('По заданным параметрам ничего не найдено\n'
-                           '===========================================================================\n')
-
+            hotels = ['По заданным параметрам ничего не найдено']
     elif message.text.isdigit() and int(message.text) > 5:
         bot.send_message(message.from_user.id, 'Число фотографий не должно быть больше 5')
     else:
         bot.send_message(message.from_user.id, 'Введите количество фотографий')
+
+    user.create_table()
+    with db:
+        user.create(command=data['commands'], telegram_id=message.from_user.id,
+                    date_time=datetime.now(), city=data['query'], hotels=hotels)
