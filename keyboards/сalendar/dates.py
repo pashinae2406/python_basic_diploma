@@ -92,4 +92,5 @@ def handle_arrival_date(call: CallbackQuery):
                                   call.message.message_id)
 
         bot.set_state(call.from_user.id, UserInfoState.city, call.message.chat.id)
-        bot.send_message(call.from_user.id, "В каком городе будем искать отели?")
+        bot.send_message(call.from_user.id, "В каком городе будем искать отели? \n"
+                                            "(Введите город на русском языке)")

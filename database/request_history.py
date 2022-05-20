@@ -15,6 +15,3 @@ class User(BaseModel):
     date_time = CharField()
     city = CharField()
     hotels = CharField()
-
-
-user = User()

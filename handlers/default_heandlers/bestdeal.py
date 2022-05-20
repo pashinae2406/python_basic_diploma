@@ -3,8 +3,10 @@ from loader import bot
 from states.requests import UserInfoState
 from keyboards.reply.answer_no_yes import answer
 from keyboards.reply.distance_range import ranges_dinst
+from loguru import logger
 
 
+@logger.catch()
 @bot.message_handler(state=UserInfoState.price_range)
 def bot_range(message: Message):
     """Функция, запрашивающая у пользователя диапазон цен"""
@@ -25,6 +27,7 @@ def bot_range(message: Message):
     bot.set_state(message.from_user.id, UserInfoState.distance_range, message.chat.id)
 
 
+@logger.catch()
 @bot.message_handler(state=UserInfoState.distance_range)
 def bot_range(message: Message):
     """Функция, запрашивающая у пользователя диапазон расстояний удаеленности от центра"""

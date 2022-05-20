@@ -11,9 +11,14 @@ from rapid_api.search_city import search_city
 from rapid_api.search_hotel import search_hotel
 from rapid_api.photos import search_photos
 from telebot.apihelper import ApiTelegramException
-from database.request_history import db, user
+from database.request_history import db, User
+from loguru import logger
 
 
+logger.add('logs.log', format='{time} {level} {message}', level='DEBUG')
+
+
+@logger.catch()
 @bot.message_handler(commands=['lowprice', 'highprice', 'bestdeal'])
 def calendar_command(message: Message) -> None:
     """Функция, запрашивающая у пользователя даты заезда и выезда"""
@@ -33,6 +38,7 @@ def calendar_command(message: Message) -> None:
                                            f"Выбери {ALL_STEPS[step]}", reply_markup=calendar)
 
 
+@logger.catch()
 @bot.message_handler(state=UserInfoState.city)
 def bot_city(message: Message) -> None:
     """Функция, запрашивающая у пользователя город для поиска отелей"""
@@ -42,6 +48,7 @@ def bot_city(message: Message) -> None:
     bot.send_message(message.from_user.id, "Спасибо, записал. Сколько отелей показать (не более 10)?")
 
 
+@logger.catch()
 @bot.message_handler(state=UserInfoState.count_hotels)
 def bot_count_hotels(message: Message) -> None:
     """Функция, запрашивающая у пользователя необходимость вывода фотографий"""
@@ -66,6 +73,7 @@ def bot_count_hotels(message: Message) -> None:
         bot.send_message(message.from_user.id, 'Количество отелей должно быть числом')
 
 
+@logger.catch()
 @bot.message_handler(state=UserInfoState.city_search)
 def bot_search(message: Message) -> None:
     """Функция вывода информации по отелям"""
@@ -90,15 +98,16 @@ def bot_search(message: Message) -> None:
                                                        'Попробуйте еще раз, выберите нужную команду.')
                 hotels = ['По заданным параметрам ничего не найдено']
 
-            user.create_table()
+            User.create_table()
             with db:
-                user.create(command=data['commands'], telegram_id=message.from_user.id,
+                User.create(command=data['commands'], telegram_id=message.from_user.id,
                             date_time=datetime.now(), city=data['query'], hotels=hotels)
             bot.set_state(message.from_user.id, UserInfoState.no_state, message.chat.id)
         else:
             bot.send_message(message.from_user.id, 'Выбери "Да" или "Нет"')
 
 
+@logger.catch()
 @bot.message_handler(state=UserInfoState.photos)
 def bot_search(message: Message) -> None:
     """Функция, которая выводит фотографии отелей"""
@@ -136,7 +145,6 @@ def bot_search(message: Message) -> None:
     else:
         bot.send_message(message.from_user.id, 'Введите количество фотографий')
 
-    user.create_table()
     with db:
-        user.create(command=data['commands'], telegram_id=message.from_user.id,
+        User.create(command=data['commands'], telegram_id=message.from_user.id,
                     date_time=datetime.now(), city=data['query'], hotels=hotels)

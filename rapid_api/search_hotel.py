@@ -2,10 +2,11 @@ import json
 import re
 from typing import Dict, List
 from rapid_api.request import request_to_api
-
+from loguru import logger
 import operator
 
 
+@logger.catch()
 def search_hotel(destination_id: int, data: Dict) -> List:
     """Функция вывода информации по отелям в запрашиваемом у пользователя городе"""
 

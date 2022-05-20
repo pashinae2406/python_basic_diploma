@@ -2,8 +2,10 @@ import json
 import re
 from typing import Dict
 from rapid_api.request import request_to_api
+from loguru import logger
 
 
+@logger.catch()
 def search_city(city: str) -> int:
     """Функция поиска ID города по запросу пользователя"""
 

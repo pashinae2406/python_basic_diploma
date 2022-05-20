@@ -2,8 +2,10 @@ import json
 import re
 from typing import Dict, List
 from rapid_api.request import request_to_api
+from loguru import logger
 
 
+@logger.catch()
 def search_photos(results: List) -> List:
     """Функция вывода фотографий отелей"""
 

@@ -1,8 +1,10 @@
 from typing import Dict
 from config_data.config import RAPID_API_KEY
 import requests
+from loguru import logger
 
 
+@logger.catch()
 def request_to_api(url: str, data: Dict) -> str:
     """Функция запроса к api по заданным параметрам"""
 
