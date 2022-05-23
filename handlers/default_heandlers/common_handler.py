@@ -14,7 +14,6 @@ from telebot.apihelper import ApiTelegramException
 from database.request_history import db, User
 from loguru import logger
 
-
 logger.add('logs.log', format='{time} {level} {message}', level='DEBUG')
 
 
@@ -86,19 +85,20 @@ def bot_search(message: Message) -> None:
             bot.send_message(message.from_user.id, 'Сколько фотографий показать? (Не более 5)')
             bot.set_state(message.from_user.id, UserInfoState.photos, message.chat.id)
         elif message.text.lower() == 'нет':
+
             result: List = search_hotel(search_city(data['query']), data)
             if result:
                 for i_res in result:
                     hotels.append(i_res['name'])
                     bot.send_message(message.from_user.id, i_res.get('answer'),
                                      disable_web_page_preview=True)
+                bot.send_message(message.from_user.id, 'Поиск окончен')
 
             else:
                 bot.send_message(message.from_user.id, 'По заданным параметрам ничего не найдено.\n'
                                                        'Попробуйте еще раз, выберите нужную команду.')
                 hotels = ['По заданным параметрам ничего не найдено']
 
-            User.create_table()
             with db:
                 User.create(command=data['commands'], telegram_id=message.from_user.id,
                             date_time=datetime.now(), city=data['query'], hotels=hotels)
@@ -113,7 +113,7 @@ def bot_search(message: Message) -> None:
     """Функция, которая выводит фотографии отелей"""
 
     with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
-        data['count_photos'] = int(message.text)
+        data['count_photos'] = message.text
 
     hotels: List = list()
     if message.text.isdigit() and int(message.text) <= 5:
@@ -127,7 +127,7 @@ def bot_search(message: Message) -> None:
                 hotels.append(i_res['name'])
                 media = [types.InputMediaPhoto(i_res['photos'][i_photo], caption=i_res.get('answer'))
                          if i_photo == 0 else types.InputMediaPhoto(i_res['photos'][i_photo])
-                         for i_photo in range(len(i_res['photos'][:data['count_photos']]))]
+                         for i_photo in range(len(i_res['photos'][:int(data['count_photos'])]))]
                 try:
                     bot.send_media_group(chat_id=message.chat.id, media=media)
                 except ApiTelegramException:
@@ -135,11 +135,13 @@ def bot_search(message: Message) -> None:
                                    'https://go.skillbox.ru/media/files/'
                                    'ba09b8e3-e01b-4a15-b361-3c5b88f5b876/1648452936327.png',
                                    caption=i_res.get('answer'))
+            bot.send_message(message.from_user.id, 'Поиск окончен')
 
         else:
             bot.send_message(message.from_user.id, 'По заданным параметрам ничего не найдено.\n'
                                                    'Попробуйте еще раз, выберите нужную команду.')
             hotels = ['По заданным параметрам ничего не найдено']
+
     elif message.text.isdigit() and int(message.text) > 5:
         bot.send_message(message.from_user.id, 'Число фотографий не должно быть больше 5')
     else:

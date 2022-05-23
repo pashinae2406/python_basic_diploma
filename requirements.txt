@@ -1,2 +1,5 @@
 pyTelegramBotAPI==4.4.0
 python-dotenv==0.19.2
+loguru==0.6.0
+peewee==3.14.10
+python_telegram_bot_calendar==1.0.5
