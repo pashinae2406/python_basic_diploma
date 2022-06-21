@@ -8,7 +8,7 @@ from loguru import logger
 
 @logger.catch()
 @bot.message_handler(state=UserInfoState.price_range)
-def bot_range(message: Message):
+def bot_range(message: Message) -> None:
     """Функция, запрашивающая у пользователя диапазон цен"""
 
     with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
@@ -29,7 +29,7 @@ def bot_range(message: Message):
 
 @logger.catch()
 @bot.message_handler(state=UserInfoState.distance_range)
-def bot_range(message: Message):
+def bot_range(message: Message) -> None:
     """Функция, запрашивающая у пользователя диапазон расстояний удаеленности от центра"""
 
     with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
